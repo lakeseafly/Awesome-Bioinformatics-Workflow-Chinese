@@ -75,7 +75,7 @@ z这样做的目的是提供各种模块化使用示例，以便读者可以更�
 对于SMART-seq2数据 [@picelli2014fulllength], 针对大量RNA-seq开发的定量程序通常是令人满意的 [@love2015rnaseq;@chen2016from].
 喜欢使用基于R的方法来进行read的比对和计数的用户可以考虑使用 `r Biocpkg("Rsubread")` 包中的方法 [@liao2013subread;@liao2014featurecounts]。
 
-许多其它scRNA-seq实验方法包含需要小心处理的预定的序列结构：
+许多其它scRNA-seq实验方法都包含需要小心处理的预定的序列结构：
 
 - 独特的分子标识物 (UMIs) [@islam2014quantitative] 被广泛用于减轻扩增偏差的影响。
 具有相同的UMI比对到相同基因的reads代表单个基础转录物分子并且仅将该基因的计数增加1。
