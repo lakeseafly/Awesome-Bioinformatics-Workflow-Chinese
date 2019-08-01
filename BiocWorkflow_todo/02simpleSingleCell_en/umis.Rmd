@@ -1,5 +1,5 @@
 ---
-title: Analyzing single-cell RNA-seq data containing UMI counts
+title: 分析含有UMI计数的单细胞RNA-seq数据
 author: 
 - name: Aaron T. L. Lun
   affiliation: &CRUK Cancer Research UK Cambridge Institute, Li Ka Shing Centre, Robinson Way, Cambridge CB2 0RE, United Kingdom
@@ -31,13 +31,13 @@ opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE, cache=TRUE)
 opts_chunk$set(fig.asp=1)
 ```
 
-# Overview
+# 概述
 
-In this workflow, we examine a heterogeneous dataset from a study of cell types in the mouse brain [@zeisel2015brain].
-This contains approximately 3000 cells of varying types such as oligodendrocytes, microglia and neurons.
-Individual cells were isolated using the Fluidigm C1 microfluidics system [@pollen2014lowcoverage] and library preparation was performed on each cell using a UMI-based protocol.
-After sequencing, expression was quantified by counting the number of UMIs mapped to each gene.
-Count data for all endogenous genes, mitochondrial genes and spike-in transcripts are available from http://linnarssonlab.org/cortex.
+在这个工作流程中，我们研究了小鼠脑细胞异质数据集 [@zeisel2015brain]。
+这包含大约3000种不同类型的细胞，例如少突胶质细胞，小胶质细胞和神经元。
+使用 Fluidigm C1 microfluidics 系统 [@pollen2014lowcoverage] 分离单个细胞，并使用基于UMI的方法进行细胞文库制备。
+测序后，通过计数比对到每个基因的UMI的数量来定量表达。
+所有内源基因，线粒体基因和加标转录物的计数数据可从下面网址中获得 http://linnarssonlab.org/cortex。
 
 ```{r}
 library(BiocFileCache)
@@ -52,12 +52,12 @@ spike.path <- bfcrpath(bfc, file.path(base.url,
     "expression_spikes_17-Aug-2014.txt"))
 ```
 
-# Setting up the data 
+# 准备好数据 
 
-The count data are distributed across several files, so some work is necessary to consolidate them into a single matrix.
-We define a simple utility function for loading data in from each file. 
-(We stress that this function is only relevant to the current dataset, and should not be used for other datasets.
-This kind of effort is generally not required if all of the counts are in a single file and separated from the metadata.)
+计数数据分布在多个文件中，因此要将它们合并为单个矩阵
+我们定义了一个简单实用的函数，用于从每个文件加载数据。
+（我们强调此函数仅与当前数据集相关，不能应用于其它数据集。
+如果所有计数都在单个文件中并与meta数据分开，则通常不需要这样的步骤。
 
 ```{r}
 readFormat <- function(infile) { 
@@ -75,7 +75,7 @@ readFormat <- function(infile) {
 }
 ```
 
-Using this function, we read in the counts for the endogenous genes, ERCC spike-in transcripts and mitochondrial genes.
+使用此功能，我们读入了内源基因，ERCC加标转录本和线粒体基因的计数。
 
 ```{r}
 endo.data <- readFormat(mRNA.path)
@@ -83,7 +83,7 @@ spike.data <- readFormat(spike.path)
 mito.data <- readFormat(mito.path)
 ```
 
-We also need to rearrange the columns for the mitochondrial data, as the order is not consistent with the other files.
+我们还需要重新排列线粒体数据的列，因为它的顺序与其他文件不一致。
 
 ```{r}
 m <- match(endo.data$metadata$cell_id, mito.data$metadata$cell_id)
@@ -96,8 +96,8 @@ stopifnot(identical(endo.data$metadata$cell_id, spike.data$metadata$cell_id)) # 
 stopifnot(all(endo.data$metadata$cell_id==mito.data$metadata$cell_id)) # should now be the same.
 ```
 
-In this particular dataset, some genes are represented by multiple rows corresponding to alternative genomic locations.
-We sum the counts for all rows corresponding to a single gene for ease of interpretation.
+在该特定数据集中，一些基因由对应于可供选择的基因位置的多行来表示。 
+为了便于解释，我们将对应于单个基因的所有行的计数相加。
 
 ```{r}
 raw.names <- sub("_loc[0-9]+$", "", rownames(endo.data$counts))
@@ -105,8 +105,8 @@ new.counts <- rowsum(endo.data$counts, group=raw.names, reorder=FALSE)
 endo.data$counts <- new.counts
 ```
 
-The counts are then combined into a single matrix for constructing a `SingleCellExperiment` object.
-For convenience, metadata for all cells are stored in the same object for later access.
+然后将计数组合成单个矩阵以构造 `SingleCellExperiment` 的对象。
+为方便起见，所有细胞的meta数据都存储在同一对象中以供以后使用。
 
 ```{r}
 library(SingleCellExperiment)
@@ -115,8 +115,8 @@ sce <- SingleCellExperiment(list(counts=all.counts), colData=endo.data$metadata)
 dim(sce)
 ```
 
-We add gene-based annotation identifying rows that correspond to each class of features.
-We also determine the Ensembl identifier for each row.
+我们添加基于基因的注释，标识与每类特征对应的行。
+我们还确定每行的Ensembl标识符。
 
 ```{r}
 # Specifying the nature of each row.
@@ -139,23 +139,23 @@ rm(mito.data, endo.data, spike.data, new.counts)
 gc()
 ```
 
-# Quality control on the cells 
+# 对细胞的质控
 
-The original authors of the study have already removed low-quality cells prior to data publication.
-Nonetheless, we compute some quality control metrics with `r Biocpkg("scater")` [@mccarthy2017scater] to check whether the remaining cells are satisfactory.
+虽然该研究的原始作者在数据发布之前已经删除了低质量的细胞。
+但是,我们还是可以使用`r Biocpkg("scater")`包来进行一些质控 [@mccarthy2017scater]，来检查剩下的细胞是否令人满意达到过滤后的要求。 
 
 ```{r}
 library(scater)
 sce <- calculateQCMetrics(sce, feature_controls=list(Mt=is.mito)) 
 ```
 
-We examine the distribution of the QC metrics across all cells (Figure \@ref(fig:libplotbrain)).
-The library sizes here are at least one order of magnitude lower than observed in the 416B dataset.
-This is consistent with the use of UMI counts rather than read counts, as each transcript molecule can only produce one UMI count but can yield many reads after fragmentation.
-In addition, the spike-in proportions are more variable than observed in the 416B dataset.
-This may reflect a greater variability in the total amount of endogenous RNA per cell when many cell types are present.
+我们检查了所有细胞的质控(QC)指标分布 (Figure \@ref(fig:libplotbrain))。
+此处的库大小至少比416B数据集中观察到的数量级低一个数量级。
+这与使用UMI计数而不是read计数一致，因为每个转录物分子只能产生一个UMI计数，但在片段化后可以产生许多reads。
+此外，加标比例比416B数据集中观察到的更多变化。
+当存在许多细胞类型时，这可以反映每个细胞的内源RNA总量的更大变化。
 
-```{r libplotbrain, fig.wide=TRUE, fig.cap="Histograms of QC metrics including the library sizes, number of expressed genes and proportion of UMIs assigned to spike-in transcripts or mitochondrial genes for all cells in the brain dataset."}
+```{r libplotbrain, fig.wide=TRUE, fig.cap="QC指标的直方图，包括大脑数据集中所有细胞的文库大小，表达基因数和分配给加标转录本或线粒体基因的UMI比例。"}
 par(mfrow=c(2,2), mar=c(5.1, 4.1, 0.1, 0.1))
 hist(sce$total_counts/1e3, xlab="Library sizes (thousands)", main="", 
     breaks=20, col="grey80", ylab="Number of cells")
@@ -167,8 +167,8 @@ hist(sce$pct_counts_Mt, xlab="Mitochondrial proportion (%)",
     ylab="Number of cells", breaks=20, main="", col="grey80")
 ```
 
-We remove small outliers for the library size and the number of expressed features, and large outliers for the spike-in proportions.
-Again, the presence of spike-in transcripts means that we do not have to use the mitochondrial proportions.
+我们删除了库大小和表达特征数量的低异常值，以及加入物比例的大异常值。
+同样，加标转录本的存在意味着我们不必使用线粒体比例。
 
 ```{r}
 libsize.drop <- isOutlier(sce$total_counts, nmads=3, type="lower", log=TRUE)
@@ -176,8 +176,8 @@ feature.drop <- isOutlier(sce$total_features_by_counts, nmads=3, type="lower", l
 spike.drop <- isOutlier(sce$pct_counts_Spike, nmads=3, type="higher")
 ```
 
-Removal of low-quality cells is then performed by combining the filters for all of the metrics.
-The majority of cells are retained, which suggests that the original quality control procedures were generally adequate.
+然后通过组合不同的质控指标来过滤这些低质量的细胞。
+大部分细胞被保留下来，这表明原始的质控步骤已经是足够的。
 
 ```{r}
 sce <- sce[,!(libsize.drop | feature.drop | spike.drop)]
@@ -185,20 +185,20 @@ data.frame(ByLibSize=sum(libsize.drop), ByFeature=sum(feature.drop),
     BySpike=sum(spike.drop), Remaining=ncol(sce))
 ```
 
-We could improve our cell filtering procedure further by setting `batch` in `isOutlier` to one or more known factors, e.g., mouse/plate of origin.
-As previously mentioned, this would avoid inflation of the MAD and improve power to remove low-quality cells.
-However, for simplicity, we will not do this as sufficient quality control has already been performed.
+我们可以进一步提高细胞过滤的质量，通过设置`isOutlier`中的`batch`的一个或多个已知因素，例如小鼠或者板的原产地。
+如之前所述，这将避免MAD的膨胀并提高去除低质量细胞的能力。
+但是，为简单起见，我们不会这样做，因为前面的质控已经足够了。
 
 ```{r echo=FALSE, results='hide'}
 gc()
 ```
 
-# Cell cycle classification
+# 细胞周期分类
 
-Application of `cyclone` [@scialdone2015computational] to the brain dataset suggests that most of the cells are in G1 phase (Figure \@ref(fig:phaseplotbrain)).
-This requires the use of the Ensembl identifiers to match up with the pre-defined classifier.
+将 `cyclone` [@scialdone2015computational] 应用于大脑数据集建议大多数细胞处于G1期 (Figure \@ref(fig:phaseplotbrain))。
+这需要使用Ensembl标识符来匹配预定义的分类器。
 
-```{r phaseplotbrain, message=FALSE, fig.cap="Cell cycle phase scores from applying the pair-based classifier on the brain dataset, where each point represents a cell."}
+```{r phaseplotbrain, message=FALSE, fig.cap="在大脑数据集上应用基于配对分类器的细胞周期阶段评分，其中每个点代表一个细胞。"}
 library(scran)
 mm.pairs <- readRDS(system.file("exdata", "mouse_cycle_markers.rds", package="scran"))
 assignments <- cyclone(sce, mm.pairs, gene.names=rowData(sce)$ENSEMBL)
@@ -206,38 +206,38 @@ table(assignments$phase)
 plot(assignments$score$G1, assignments$score$G2M, xlab="G1 score", ylab="G2/M score", pch=16)
 ```
 
-However, the intepretation of this result requires some caution due to differences between the training and test datasets.
-The classifier was trained on C1 SMARTer data and accounts for the biases in that protocol. 
-The brain dataset uses UMI counts, which has a different set of biases, e.g., 3'-end coverage only, no length bias, no amplification noise.
-Furthermore, many neuronal cell types are expected to lie in the G0 resting phase, which is distinct from the other phases of the cell cycle [@coller2006new].
-`cyclone` will generally assign such cells to the closest known phase in the training set, which would be G1.
+但是，由于训练和测试数据集之间存在差异，因此对此结果的解释需要谨慎。
+分类器使用C1 SMARTer数据的进行训练，并解释了该实验方法中的偏差。
+大脑数据集使用UMI计数，其具有不同的偏差集合，例如，仅3'端覆盖，没有长度偏差，没有放大噪声。
+此外，预计许多神经细胞类型位于G0休眠期，这与细胞周期的其他阶段不同[@coller2006new]。
+`cyclone` 通常会将这些细胞分配给训练集中最接近的已知阶段，即G1。
 
 ```{r echo=FALSE, results='hide'}
 gc()
 ```
 
-# Examining gene-level metrics
+# 检查基因水平的指标
 
-Figure \@ref(fig:topgenebrain) shows the most highly expressed genes across the cell population in the brain dataset.
-This is mostly occupied by spike-in transcripts, reflecting the use of spike-in concentrations that span the entire range of expression.
-There are also a number of constitutively expressed genes, as expected.
+图 \@ref(fig:topgenebrain)显示了大脑数据集中细胞群中表达最高的基因。
+主要呗加标转录本占据，反映了跨越整个表达范围的加标浓度的使用。
+正如预期的那样，还有许多与基本构成相关的表达的基因。
 
-```{r topgenebrain, fig.asp=1.2, fig.wide=TRUE, fig.cap="Percentage of total counts assigned to the top 50 most highly-abundant features in the brain dataset. For each feature, each bar represents the percentage assigned to that feature for a single cell, while the circle represents the average across all cells. Bars are coloured by the total number of expressed features in each cell, while circles are coloured according to whether the feature is labelled as a control feature."}
+```{r topgenebrain, fig.asp=1.2, fig.wide=TRUE, fig.cap="分配给大脑数据集中前50个最丰富的特征的总计数百分比。对于每个要素，每个条形表示为单个细胞分配给该要素的百分比，而圆圈表示所有细胞的平均值。条形图由每个细胞中表达的特征的总数着色，而圆形根据特征是否标记为控制特征而着色。"}
 fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=16))
 plotHighestExprs(sce, n=50) + fontsize
 ```
 
-Gene abundance is quantified by computing the average count across all cells (Figure \@ref(fig:abhistbrain)).
-As previously mentioned, the UMI count is generally lower than the read count.
+通过计算所有细胞的平均计数来量化基因丰度 (Figure \@ref(fig:abhistbrain))。
+如前所述，UMI计数通常低于reads的计数。
 
-```{r abhistbrain, fig.cap="Histogram of log-average counts for all genes in the brain dataset."}
+```{r abhistbrain, fig.cap="大脑数据集中所有基因的对数平均计数的直方图。"}
 ave.counts <- calcAverage(sce, use_size_factors=FALSE)
 hist(log10(ave.counts), breaks=100, main="", col="grey",
     xlab=expression(Log[10]~"average count"))
 ```
 
-We save the average counts into the `SingleCellExperiment` object for later use.
-We also remove genes that have average counts of zero, as this means that they are not expressed in any cell.
+我们将平均计数保存到 `SingleCellExperiment`对象中供以后使用。
+我们还删除了平均计数为零的基因，因为这意味着它们不会在任何细胞中表达。
 
 ```{r}
 rowData(sce)$ave.count <- ave.counts
@@ -250,18 +250,18 @@ summary(to.keep)
 gc()
 ```
 
-# Normalization of cell-specific biases
+# 细胞特异性偏差的正常化
 
-We normalize endogenous genes using the `computeSumFactors()` function with an additional pre-clustering step [@lun2016pooling].
-Cells in each cluster are normalized separately, and the size factors are rescaled to be comparable across clusters.
-This avoids the need to assume that most genes are non-DE across the entire population - only a non-DE majority is required between pairs of clusters.
-Scaling is then performed to ensure that size factors of cells in different clusters are comparable.
+我们使用 `computeSumFactors()` 的功能将内源基因标准化，并进行额外的预聚类步骤 [@lun2016pooling]。
+每个聚类中的细胞分别进行标准化，并且size factors被重新调整，以便在聚类之间进行比较。
+这避免了假设大多数基因在整个群体中都没有表达差异，只要大多数群集对是没有表达差异就可以了。
+然后进行缩放，以确保不同聚类中的细胞的size factors是可比较的。
 
-- We use a average count threshold of 0.1 to define high-abundance genes to use during normalization.
-This is lower than the default threshold of `min.mean=1`, reflecting the fact that UMI counts are generally smaller than read counts.
-- We speed up clustering by performing fast dimensionality reduction and then clustering cells on the PCs.
-This is the purpose of the `BSPARAM=` argument, which instructs `quickCluster()` to use a approximate algorithm for PCA^[Using methods from the `r CRANpkg("irlba")` package.].
-The approximation relies on stochastic initialization so we need to set the random seed for reproducibility - see below for more detail.
+- 我们使用0.1的平均计数阈值来定义在标准化期间使用的高丰度基因。
+这低于默认阈值 `min.mean=1`, 反映了UMI计数通常小于read计数的事实。
+- 我们加速聚类的速度通过快速降维并集聚细胞在PCs上。
+这是 `BSPARAM=` 参数的使用目的,它指示`quickCluster()`使用PCA^[使用 `r CRANpkg("irlba")`包中的方法。]的近似值算法。
+近似值依赖于随机初始化，因此我们需要将随机种子设置为可重复性的-有关更多详细信息，请参见下文。
 
 ```{r}
 library(BiocSingular)
@@ -271,78 +271,78 @@ sce <- computeSumFactors(sce, cluster=clusters, min.mean=0.1)
 summary(sizeFactors(sce))
 ```
 
-Compared to the 416B analysis, more scatter is observed around the trend between the total count and size factor for each cell (Figure \@ref(fig:normplotbrain)).
-This is consistent with an increased amount of DE between cells of different types, which compromises the accuracy of library size normalization [@robinson2010scaling].
-In contrast, the size factors are estimated based on median ratios and are more robust to the presence of DE between cells.
+与416B分析相比，更多的散射可以在每个细胞的总计数和 size factor的趋势间观察到 (Figure \@ref(fig:normplotbrain))。
+这与不同类型的细胞之间DE的增加量一致，这折中了文库大小标准化的准确性[@robinson2010scaling]。
+相反，the size factors 基于中值比估算并且对于细胞之间的DE的存在是更稳健的。 
 
-```{r normplotbrain, fig.cap="Size factors from pooling, plotted against library sizes for all cells in the brain dataset. Axes are shown on a log-scale."}
+```{r normplotbrain, fig.cap="来自汇集的size factors，针对大脑数据集中所有细胞的文库大小绘制。轴以对数刻度显示。"}
 plot(sizeFactors(sce), sce$total_counts/1e3, log="xy",
     ylab="Library size (thousands)", xlab="Size factor")
 ```
 
-We also compute size factors specific to the spike-in set, as previously described.
+我们还计算特定的在顶端聚类的size factors子，如前所述。
 
 ```{r}
 sce <- computeSpikeFactors(sce, type="Spike", general.use=FALSE)
 ```
 
-Finally, normalized log-expression values are computed for each endogenous gene or spike-in transcript using the appropriate size factors.
+最后，使用适当的size factors计算每个内源基因或加标转录物的标准化对数表达值。
 
 ```{r}
 sce <- normalize(sce)
 ```
 
-__Comments from Aaron:__
+__Aaron的注释:__
 
-- Only a rough clustering is required to avoid pooling together very different cell types in `computeSumFactors()`.
-This reduces the chance of violating the non-DE assumption that is made during any gene-based scaling normalization.
-There is no need for precise clustering at this step, as we will not be interpreting the `clusters` at all, 
-`computeSumFactors()` is robust to a moderate level of differential expression between cells in the same cluster, so careful definition of subclusters is not required.
-That said, there does need to be sufficient cells in each cluster for pooling, which can be guaranteed with the `min.size=` argument in `quickCluster()`.
-- Older versions of `quickCluster()` performed clustering based on rank correlations between cells.
-The current version (with `use.ranks=FALSE`) uses graph-based clustering on principal components obtained from log-expression values.
-This is faster and yields higher resolution clusters than before.
-Nonetheless, the previous behaviour can be recovered by setting the arguments appropriately, see `?quickCluster` for more details.
+- 只需要粗略的聚类就可以避免将非常不同的细胞类型汇集在一起`computeSumFactors()`之中。
+这降低了违反在任何基于基因的缩放归一化期间进行的非DE假设可能性。T
+在这一步骤中不需要精确的聚类，因为我们根本不会解释所提及的聚类。
+`computeSumFactors()`对于同一聚类中的细胞之间的中等水平的差异表达是很好用的的，因此不需要仔细定义子聚类。
+也就是说，每个集群中都需要有足够的细胞用于pooling，这可以通过设置`quickCluster()`中的`min.size=`参数。
+- 更旧版本`quickCluster()`执行聚类基于细胞之间的秩相关性。
+当前版本 (`use.ranks=FALSE`)使用基于图像化的聚类根据从表达量的对数值获得的主成分。
+这比以前更快并且产生更高分辨率的聚类。
+尽管如此，可以通过适当设置参数来恢复以前的行为分析，请参考 `?quickCluster` 来获取更多相关信息。
 
 ```{r echo=FALSE, results='hide'}
 gc()
 ```
 
-# Modelling and removing technical noise
+# 建模并消除技术噪音
 
-We model the technical noise by fitting a mean-variance trend to the spike-in transcripts with the `trendVar()` function.
+我们对技术噪音建模通过使用`trendVar()` 函数拟合加标转录物的差异的均值。
 
 ```{r}
 var.fit <- trendVar(sce, parametric=TRUE, loess.args=list(span=0.4))
 var.out <- decomposeVar(sce, var.fit)
 ```
 
-Figure \@ref(fig:hvgplotbrain) indicates that the trend is fitted accurately to the technical variances.
-The technical and total variances are also much smaller than those in the 416B dataset.
-This is due to the use of UMIs, which reduces the noise caused by variable PCR amplification [@islam2014quantitative].
-Furthermore, the spike-in trend is consistently lower than the variances of the endogenous genes.
-This reflects the heterogeneity in gene expression across cells of different types.
+图 \@ref(fig:hvgplotbrain) 表明趋势与技术产生的差异准确拟合。
+技术和总差异也远小于416B数据集中的差异。
+这是由于使用了UMI，它降低了由可变PCR扩增引起的噪音 [@islam2014quantitative]。
+此外，加入物的趋势始终低于内源基因的差异。
+这反映了不同类型细胞中基因表达的异质性。
 
-```{r hvgplotbrain, fig.cap="Variance of normalized log-expression values against the mean for each gene, calculated across all cells in the brain dataset after blocking on the sex effect. The blue line represents the mean-dependent trend in the technical variance of the spike-in transcripts (also highlighted as red points)."}
+```{r hvgplotbrain, fig.cap="标准化的对数表达值相对于每个基因的平均值的变化，在除去性别影响后在大脑数据集中的所有细胞上计算。蓝线表示加标转录本的技术差异的平均趋势（也突出显示为红点）。"}
 plot(var.out$mean, var.out$total, pch=16, cex=0.6, xlab="Mean log-expression", 
     ylab="Variance of log-expression")
 points(var.out$mean[isSpike(sce)], var.out$total[isSpike(sce)], col="red", pch=16)
 curve(var.fit$trend(x), col="dodgerblue", add=TRUE, lwd=2)
 ```
 
-We check the distribution of expression values for the genes with the largest biological components to ensure that they are not driven by outliers (Figure \@ref(fig:hvgvioplotbrain)).
-Some tweaking of the `plotExpression` parameters is necessary to visualize a large number of cells.
+我们检查具有最大生物成分的基因的表达值的分布，以确保它们不是由异常值引起的 (Figure \@ref(fig:hvgvioplotbrain)).
+为了可视化大量的细胞，需要对参数进行一些调整。
 
-```{r hvgvioplotbrain, fig.cap="Violin plots of normalized log-expression values for the top 10 HVGs in the brain dataset. For each gene, each point represents the log-expression value for an individual cell."}
+```{r hvgvioplotbrain, fig.cap="大脑数据集中前10个HVG的归一化对数表达值的小提琴图。对于每个基因，每个点代表单个细胞的对数表达值。"}
 chosen.genes <- order(var.out$bio, decreasing=TRUE)[1:10]
 plotExpression(sce, rownames(var.out)[chosen.genes], 
     point_alpha=0.05, jitter_type="jitter") + fontsize
 ```
 
-Finally, we use PCA to denoise the expression values, yielding a set of coordinates for each cell where the technical noise has been removed.
-Setting `BSPARAM=IrlbaParam()` in `denoisePCA()` will perform an approximate singular value decomposition (SVD) using methods from the `r CRANpkg("irlba")` package.
-This is much faster than the exact algorithm on large datasets without much loss of accuracy.
-The approximate algorithm involves a random initialization so we set the seed to guarantee reproducibility.
+最后，我们使用PCA对表达l量值进行去噪，为每个已去除技术噪声的细胞生成一组坐标。
+设置`denoisePCA()`中的`BSPARAM=IrlbaParam()`，会执行近似奇异值分离法(SVD)，通过使用到`r CRANpkg("irlba")`包中的方法。
+这比大型数据集上的精确算法快得多，而且没有损失太多的准确度。
+近似算法涉及随机初始化，因此我们设置种子值以保证再现性。
 
 ```{r}
 set.seed(1000)
@@ -350,28 +350,27 @@ sce <- denoisePCA(sce, technical=var.fit$trend, BSPARAM=IrlbaParam())
 ncol(reducedDim(sce, "PCA"))
 ```
 
-**Comments from Aaron:**
+**Aaron的注释:**
 
-- In theory, we should block on the plate of origin for each cell.
-However, only 20-40 cells are available on each plate, and the population is also highly heterogeneous.
-This means that we cannot assume that the distribution of sampled cell types on each plate is the same.
-Thus, to avoid regressing out potential biology, we will not block on any factors in this analysis.
-- The upper limit of PCs to retain in `denoisePCA()` is specified by the `max.rank=` argument.
-This is set to 100 by default to ensure that the approximate SVD runs quickly.
-A higher `max.rank` may be more appropriate for extremely heterogeneous populations, though the default setting is generally satisfactory for dimensionality reduction.
+- 理论上，我们应该暂时保留每个细胞的板的起源。
+然而，每个平板上只有20-40个细胞，并且种群也是高度异质的。
+这意味着我们不能假设每个板上的采样细胞类型的分布是相同的。
+因此，为避免消除潜在的生物学问题，我们不会暂且保留分析中的任何因素。
+- 要保留`denoisePCA()`中的的PC的上限，由`max.rank=`参数设定。
+较高的`max.rank`可能更适合含有极度差异的群体，尽管降低维度默认设置t已经可以令人满意了。
 
 ```{r, echo=FALSE, results='hide', message=FALSE}
 gc()
 ```
 
-# Data exploration with dimensionality reduction
+# 降低维数的数据探索
 
-We perform dimensionality reduction on the denoised PCs to check if there is any substructure. 
-Cells separate into clear clusters in the _t_-SNE plot [@van2008visualizing] in Figure \@ref(fig:tsneplotbrain), corresponding to distinct subpopulations.
-This is consistent with the presence of multiple cell types in the diverse brain population.
-We increase the perplexity to favour visualization of the overall structure at the expense of local scale.
+我们对去噪的PC进行降维，以检查是否存在子结构。
+细胞在 _t_-SNE 图 [@van2008visualizing] in Figure \@ref(fig:tsneplotbrain)中分类成明显的不同聚类，这些聚类对应于不同的亚群。
+这与脑细胞群体中存在多种细胞类型一致。
+我们增加了混乱度，以牺牲局部比例尺为代价，以便维持整体结构的可视化。
 
-```{r tsneplotbrain, fig.cap="_t_-SNE plots constructed from the denoised PCs of the brain dataset. Each point represents a cell and is coloured according to its expression of _Neurod6_ (left) or _Mog_ (right).", fig.width=12, fig.asp=0.5}
+```{r tsneplotbrain, fig.cap="从大脑数据集的去噪PC构建的_t_-SNE 图。 每个点代表一个细胞，并根据其表达着色 _Neurod6_ (左) or _Mog_ (右)。", fig.width=12, fig.asp=0.5}
 set.seed(1000)
 sce <- runTSNE(sce, use_dimred="PCA", perplexity=50)
 tsne1 <- plotTSNE(sce, colour_by="Neurod6") + fontsize
@@ -379,9 +378,9 @@ tsne2 <- plotTSNE(sce, colour_by="Mog") + fontsize
 multiplot(tsne1, tsne2, cols=2)
 ```
 
-The PCA plot is less effective at separating cells into many different clusters (Figure \@ref(fig:pcaplotbrain)).
-This is because the first two PCs are driven by strong differences between specific subpopulations, which reduces the resolution of more subtle differences between some of the other subpopulations.
-Nonetheless, some substructure is still visible.
+PCA图在将细胞分离成许多不同的聚类时效果较差 (Figure \@ref(fig:pcaplotbrain))。
+这是因为前两个PC是由特定子群体之间的强烈差异导致的，这降低了一些其它子群体之间更微妙差异的识别度。
+尽管如此，仍然可以看到一些子结构的差异。
 
 ```{r pcaplotbrain, fig.cap="PCA plots constructed from the denoised PCs of the brain dataset. Each point represents a cell and is coloured according to its expression of the _Neurod6_ (left) or _Mog_ (right).", fig.width=12, fig.asp=0.5}
 pca1 <- plotReducedDim(sce, use_dimred="PCA", colour_by="Neurod6") + fontsize
@@ -389,23 +388,23 @@ pca2 <- plotReducedDim(sce, use_dimred="PCA", colour_by="Mog") + fontsize
 multiplot(pca1, pca2, cols=2)
 ```
 
-For both methods, we colour each cell based on the expression of a particular gene.
-This is a useful strategy for visualizing changes in expression across the lower-dimensional space.
-It can also be used to characterise each cluster if the selected genes are known markers for particular cell types.
-For example, _Mog_ can be used to identify clusters corresponding to oligodendrocytes.
+对于这两种方法，我们根据特定基因的表达对每个细胞着色。
+这是一种有用的策略，用于可视化整个低维空间中表达量的变化。
+如果所选基因是特定细胞类型的已知标记，它还可用于表征每个聚类。
+例如， _Mog_ 可用于识别对应于少突胶质细胞的聚类。
 
 ```{r echo=FALSE, results='hide'}
 gc()
 ```
 
-# Clustering cells into putative subpopulations
+# 将细胞聚类成假定的亚群
 
-## Using graph-based clustering
+## 使用基于图形的聚类
 
-The reduced dimension coordinates are used to cluster cells into putative subpopulations.
-We do so by constructing a shared-nearest-neighbour graph [@xu2015identification], in which cells are the nodes and edges are formed between cells that share nearest neighbours.
-Clusters are then defined as highly connected communities of cells within this graph, using methods from the `r CRANpkg("igraph")` package.
-This is more efficient than forming a pairwise distance matrix for hierarchical clustering of large numbers of cells.
+减小的维度坐标用于将细胞聚类成推定的亚群。
+我们通过构建共享最近邻图 [@xu2015identification]来实现,其中细胞是节点，并且在共享最近相邻的细胞之间形成边。
+然后使用`r CRANpkg("igraph")`包中的方法将聚类定义为此图中高度相连的细胞社群。
+这比使用成对距离矩阵形成大量细胞的分层聚类的方法更有效。
 
 ```{r}
 snn.gr <- buildSNNGraph(sce, use.dimred="PCA")
@@ -414,10 +413,10 @@ my.clusters <- cluster.out$membership
 table(my.clusters)
 ```
 
-We visualize the cluster assignments for all cells on the _t_-SNE plot in Figure \@ref(fig:tsneclusterbrain).
-Adjacent cells are generally assigned to the same cluster, indicating that the clustering procedure was applied correctly.
+我们通过 _t_-SNE图可视化所有细胞聚类的分布情况 \@ref(fig:tsneclusterbrain)。
+通常将相邻细胞分配给相同的聚类，同时也证明了整个聚类的过程是正确的。
 
-```{r tsneclusterbrain, message=FALSE, fig.cap="_t_-SNE plot of the denoised PCs of the brain dataset. Each point represents a cell and is coloured according to its assigned cluster identity."}
+```{r tsneclusterbrain, message=FALSE, fig.cap="大脑数据集的去噪PC的_t_-SNE 图。每个点代表一个单元格，并根据其指定的聚类标识进行着色。"}
 sce$cluster <- factor(my.clusters)
 plotTSNE(sce, colour_by="cluster") + fontsize
 ```
@@ -426,48 +425,48 @@ plotTSNE(sce, colour_by="cluster") + fontsize
 gc()
 ```
 
-An alternative approach is to use graph-based visualizations such as force-directed layouts (Figure \@ref(fig:fdlbrain)).
-These are appealing as they directly represent the relationships used during clustering.
-However, convergence tends to be slow for large graphs, so some tinkering with `niter=` may be required to ensure that the results are stable. 
+另一种方法是使用基于图形的可视化，例如力导向布局 (Figure \@ref(fig:fdlbrain))。
+这方法吸引关联性很强，因为它们直接表示聚类期间的相互关系。
+但是，对于大型图形，收敛趋于缓慢，因此需要使用`niter=`参数以确保结果的稳定性。
 
-```{r fdlbrain, message=FALSE, fig.cap="Force-directed layout for the shared nearest-neighbour graph of the brain dataset. Each point represents a cell and is coloured according to its assigned cluster identity."}
+```{r fdlbrain, message=FALSE, fig.cap="大脑数据集的共享最近邻图的强制定向布局。每个点代表一个细胞，并根据其指定的聚类标识进行着色。"}
 set.seed(2000)
 reducedDim(sce, "force") <- igraph::layout_with_fr(snn.gr, niter=5000)
 plotReducedDim(sce, colour_by="cluster", use_dimred="force")
 ```
 
-Very heterogeneous datasets may yield a few large clusters on the first round of clustering.
-It can be useful to repeat the variance modelling, denoising and clustering using only the cells within each of the initial clusters.
-This can be achieved by subsetting `sce` according to a particular level of `my.clusters`, and re-applying the relevant functions on the subset.
-Doing so may focus on a different set of genes that define heterogeneity _within_ an initial cluster, as opposed to those that define differences _between_ the initial clusters.
-This would allow fine-scale structure within each cluster to be explored at greater resolution. 
-For simplicity, though, we will only use the broad clusters corresponding to clear subpopulations in this workflow.
+非常异构的数据集可能会在第一轮聚类中产生一些大的聚类。
+这是有用的仅使用每个初始聚类的细胞重复构建差异模型，去燥和聚类。
+这可以通过构建子集化`sce`基于特定水平的`my.clusters`，并重新应用相关的函数在子集上。
+这样做可能集中于在初始聚类内，已被定义为异质性的不同基因集，而不是那些被定义为初始聚类之间差异基因。
+这将允许以更高的识别率去探索每个聚类内的精结构。
+但是，为简单起见，我们将仅使用与此工作流程中的已明确子群体相对应的广泛聚类。
 
-**Comments from Aaron:**
+**Aaron的注释:**
 
-- Many different clustering methods are available in the `r CRANpkg("igraph")` package.
-We find that the Walktrap algorithm is usually a good default choice [@yang2016comparative], though users are encouraged to experiment with different algorithms.
-- Decreasing the number of neighbours `k` in `buildSNNGraph` will reduce the connectivity of the graph.
-This will generally result in the formation of smaller clusters [@xu2015identification], which may be desirable if greater resolution is required.
-- Notice that we do not run `library(igraph)`, but instead use `igraph::` to extract methods from the package. 
-This is because `r CRANpkg("igraph")` contains a `normalize` method that will override its counterpart from `r Biocpkg("scater")`, resulting in some unusual bugs.
+- `r CRANpkg("igraph")`包中提供了许多不同的聚类方法。.
+我们发现Walktrap算法通常是一个很好的默认选择[@yang2016comparative]，但鼓励用户尝试不同的算法。
+- 减少近邻数量`buildSNNGraph`中的 `k`，将降低图形的连通性。
+这通常会导致形成较小的聚类[@xu2015identification], 如果需要更高的识别度，这可能是理想的做法。
+- 请注意，我们不运行`library(igraph)`, 而是使用`igraph::` 从包中提取方法。
+这是因为 `r CRANpkg("igraph")`包含了 `normalize`的方法，他将会覆盖`r Biocpkg("scater")`的对应物, 导致一些不寻常的错误。
 
-## Evaluating graph-based clusters
+## 评估基于图的聚类232323232323
 
-The modularity score provides a global measure of clustering performance for community detection methods.
-Briefly, it compares the number of within-cluster edges to the expected number under a null model of random edges.
-A high modularity score (approaching the maximum of 1) indicates that the detected clusters are enriched for internal edges, with relatively few edges between clusters.
+模块化得分制为community检查方法提供了全局测量聚类情况的表现。
+简而言之，它将聚类内边缘的数量与随机边缘的空模型下的预期数量进行比较。
+高模块性分数（接近最大值1）表示检测到的聚类富集内部边缘，聚类之间的边缘相对较少。
 
 ```{r}
 igraph::modularity(cluster.out)
 ```
 
-We further investigate the clusters by examining the total weight of edges for each pair of clusters.
-For each pair, the observed total weight is compared to what is expected under a null model, similar to the modularity calculation.
-Most clusters contain more internal links than expected (Figure \@ref(fig:heatmodbrain)), while links between clusters are fewer than expected.
-This indicates that we successfully clustered cells into highly-connected communities.
+我们通过检查每对聚类的边缘的总比重来进一步研究聚类。
+对于每对边缘，将观察到的总比重与空模型下的预期总比重进行比较，类似于模块化计算。
+大多数聚类包含的内部链接多于预期 (Figure \@ref(fig:heatmodbrain)),而聚类之间的链接少于预期。
+这表明我们成功地将细胞聚类成高度连接的社区群。
 
-```{r heatmodbrain, fig.cap="Heatmap of the log~10~-ratio of the total weight between nodes in the same cluster or in different clusters, relative to the total weight expected under a null model of random links."}
+```{r heatmodbrain, fig.cap="相对于在随机链接的空模型下预期的总权重，相同聚类或不同聚类中的节点之间的总权重的log 10的比率的热图。"}
 mod.out <- clusterModularity(snn.gr, my.clusters, get.values=TRUE)
 ratio <- mod.out$observed/mod.out$expected
 lratio <- log10(ratio + 1)
@@ -477,24 +476,24 @@ pheatmap(lratio, cluster_rows=FALSE, cluster_cols=FALSE,
     color=colorRampPalette(c("white", "blue"))(100))
 ```
 
-To summarize the relationships between clusters, we use the ratio of the observed and expected total weights to build a graph across clusters.
-The cluster-based graph can be visualized using a force-directed layout to identify "clusters of clusters" that are highly interconnected. 
-This is similar to the "graph abstraction" strategy proposed by @wolf2017graph.
+为了总结聚类之间的关系，我们使用观察到的和预期的总权重的比率来构建跨聚类的图。
+可以使用力导向布局来可视化基于群聚类的图，以识别高度互连的“聚类群”。
+这类似于@wolf2017graph 提出的“图形抽象”策略.
 
-```{r graphbrain, fig.cap="Force-directed layout showing the relationships between clusters based on the ratio of observed to expected total weights between nodes in different clusters. The thickness of the edge between a pair of clusters is proportional to the corresponding ratio."}
+```{r graphbrain, fig.cap="力导向布局，显示基于不同聚类中节点之间观察到的预期总重量的比率的聚类之间的关系。一对聚类之间的边缘的厚度与相应的比例成比例"}
 cluster.gr <- igraph::graph_from_adjacency_matrix(ratio, 
     mode="undirected", weighted=TRUE, diag=FALSE)
 plot(cluster.gr, edge.width=igraph::E(cluster.gr)$weight*10)  
 ```
 
-**Comments from Aaron:**
+**Aaron的注释:**
 
-- We do not use the silhouette coefficient to assess clustering for large datasets.
-This is because `cluster::silhouette` requires the construction of a distance matrix, which may not be feasible when many cells are involved.
-- Technically, the modularity score is obtained by subtracting the observed from expected total weights. 
-We use the ratio instead as this is guaranteed to be positive and does not exhibit differences in magnitude due to differences in the number of cells in each cluster.
+- 我们不使用轮廓系数来评估大型数据集的聚类。
+这是因为 `cluster::silhouette` 需要构建距离矩阵，当涉及许多细胞时这可能是不可行的。
+- 从技术上讲，模块性分数制是通过从预期的总权重中减去观察到的。
+我们使用该比率，因为它的值保证是正的，并且没有因每个聚类中的细胞数量的差异而，表现出幅度差异。.
 
-# Detecting marker genes between subpopulations
+# 检测亚群之间的标记基因
 
 ```{r, echo=FALSE, results="hide"}
 # Hidden variables for use in text or hidden chunks,
@@ -503,10 +502,10 @@ chosen.inter.cluster <- 4
 chosen.inter.other <- 11
 ```
 
-We use the `findMarkers` function with `direction="up"` to identify upregulated marker genes for each cluster.
-As previously mentioned, we focus on upregulated genes as these can quickly provide positive identification of cell type in a heterogeneous population.
-We examine the table for cluster `r chosen.inter.cluster`, in which log-fold changes are reported between cluster `r chosen.inter.cluster` and every other cluster.
-The same output is provided for each cluster in order to identify genes that discriminate between clusters.
+我们使用该 `findMarkers` 函数和`direction="up"`选项去识别每个聚类的上调标记基因。
+如上所述，我们重点关注于上调基因，因为这些基因可以快速提供异质群体中细胞类型的有效鉴定。
+我们检查了这个 `r chosen.inter.cluster`聚类的表, 在这个表中报告了聚类`r chosen.inter.cluster`和其它聚类对数倍的变化。
+每个聚类具有相同的输出，以便识别区分聚类中的基因。
 
 ```{r, echo=FALSE, results="hide"}
 old.digits <- options()$digits
@@ -535,22 +534,22 @@ stopifnot(all(sapply(marker.set["Synpr",-(1:3)], sign)==1))
 options(digits=old.digits)
 ```
 
-Figure \@ref(fig:heatmapmarkerbrain) indicates that most of the top markers are strongly DE in cells of cluster `r chosen.inter.cluster` compared to some or all of the other clusters.
-We can use these markers to identify cells from cluster `r chosen.inter.cluster` in validation studies with an independent population of cells.
-A quick look at the markers suggest that cluster `r chosen.inter.cluster` represents interneurons based on expression of *Gad1* and *Slc6a1* [@zeng2012largescale],
-differing from closely related cells in cluster `r chosen.inter.other` by virtue of high *Synpr* expression.
+图 \@ref(fig:heatmapmarkerbrain) 表明与一些其它聚类相比，聚类 `r chosen.inter.cluster`含有与其它聚类对比的大多数具有比较大表达差异的顶端标记。
+我们可以使用这些标记在具有独立细胞群的验证研究中鉴定聚类`r chosen.inter.cluster` 中的细胞。
+快速观察聚类表明聚类 `r chosen.inter.cluster`代表基于 *Gad1* 和 *Slc6a1*的中间神经元 [@zeng2012largescale],
+与在聚类`r chosen.inter.other`中密切相关的细胞不同，因为*Synpr* 高度表达。
 
-```{r heatmapmarkerbrain, fig.wide=TRUE, fig.cap=sprintf("Heatmap of mean-centred and normalized log-expression values for the top set of markers for cluster %i in the brain dataset. Column colours represent the cluster to which each cell is assigned, as indicated by the legend.", chosen.inter.cluster)}
+```{r heatmapmarkerbrain, fig.wide=TRUE, fig.cap=sprintf("大脑数据集中聚类`chosen.inter.cluster`的顶部标记集的平均中心和标准化对数表达值的热图。列颜色表示每个细胞分配到的聚类，如图例所示。", chosen.inter.cluster)}
 top.markers <- rownames(marker.set)[marker.set$Top <= 10]
 plotHeatmap(sce, features=top.markers, columns=order(my.clusters),
     colour_columns_by="cluster", cluster_cols=FALSE, 
     center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
 ```
 
-An alternative visualization approach is to plot the log-fold changes to all other clusters directly (Figure \@ref(fig:heatmaplfcbrain)).
-This is more concise and is useful in situations involving many clusters that contain different numbers of cells.
+另一种可视化方法是直接将对数倍变化绘制到所有其它聚类(Figure \@ref(fig:heatmaplfcbrain))。
+这更简洁，在涉及包含不同数量细胞的多个聚类的情况下非常有用。.
 
-```{r heatmaplfcbrain, fig.asp=1.5, fig.cap=sprintf("Heatmap of log-fold changes in expression for the top set of markers for cluster %i, compared to every other cluster in the brain data set.", chosen.inter.cluster)}
+```{r heatmaplfcbrain, fig.asp=1.5, fig.cap=sprintf("与大脑数据集中的每个其它聚类相比，聚类`chosen.inter.cluster`的顶部标记集的表达式中对数倍变化的热图。" )}
 logFCs <- as.matrix(marker.set[1:50,-(1:3)])
 colnames(logFCs) <- sub("logFC.", "", colnames(logFCs))
 
@@ -559,7 +558,7 @@ max.lfc <- max(abs(range(logFCs)))
 pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
 ```
 
-We save the list of candidate marker genes for further examination, using compression to reduce the file size.
+我们保存候选标记基因列表以供进一步检查，使用压缩的方法来减小文件大小。
 
 ```{r}
 gzout <- gzfile("brain_marker_1.tsv.gz", open="wb")
@@ -567,16 +566,16 @@ write.table(marker.set, file=gzout, sep="\t", quote=FALSE, col.names=NA)
 close(gzout)
 ```
 
-**Comments from Aaron:**
+**Aaron的注释:**
 
-- The `overlapExprs()` function may also be useful for summarizing differences between clusters.
-This is discussed in more detail `r simpleSingleCell:::.link("de", "Using the Wilcoxon rank sum test", "here")`.
+- 该 `overlapExprs()`函数也可用于总结集群之间的差异。
+更详细的的讨论 `r simpleSingleCell:::.link("de", "Using the Wilcoxon rank sum test", "在这里")`.
 
-# Concluding remarks
+# 结束语
 
-Having completed the basic analysis, we save the `SingleCellExperiment` object with its associated data to file.
-This is especially important here as the brain dataset is quite large.
-If further analyses are to be performed, it would be inconvenient to have to repeat all of the pre-processing steps described above.
+完成基本分析后，我们将`SingleCellExperiment` 对象及其关联数据保存到文件中。
+这非常重要，因为大脑数据集非常大。
+如果要进行进一步的分析，则必须重复上述所有的预处理步骤是不方便的。
 
 ```{r}
 saveRDS(file="brain_data.rds", sce)

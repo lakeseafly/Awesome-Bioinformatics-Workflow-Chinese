@@ -1,5 +1,5 @@
 ---
-title: Analyzing single-cell RNA sequencing data from droplet-based protocols
+title: 从基于液滴的实验方法来分析单细胞RNA测序数据
 author: 
 - name: Aaron T. L. Lun
   affiliation: Cancer Research UK Cambridge Institute, Li Ka Shing Centre, Robinson Way, Cambridge CB2 0RE, United Kingdom
@@ -12,7 +12,7 @@ output:
   BiocStyle::html_document:
     titlecaps: false
     toc_float: true
-bibliography: ref.bib
+#bibliography: ref.bib
 ---
 
 ```{r, echo=FALSE, message=FALSE, results="hide", cache=FALSE}
@@ -22,15 +22,15 @@ opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE, cache=TRUE)
 opts_chunk$set(fig.asp=1)
 ```
 
-# Overview 
+# 概述 
 
-Droplet-based scRNA-seq protocols capture cells in droplets for massively multiplexed library prepation [@klein2015droplet;@macosko2015highly].
-This greatly increases the throughput of scRNA-seq studies, allowing tens of thousands of individual cells to be profiled in a routine experiment.
-However, it (again) involves some differences from the previous workflows to reflect some unique aspects of droplet-based data.
+基于液滴的scRNA-seq实验方法来捕获液滴中的细胞可用于大规模多重文库制备[@klein2015droplet;@macosko2015highly]。
+这大大增加了scRNA-seq研究的通量，允许在常规实验中分析数万个单个细胞。
+但是，它（再次）与先前工作流程存在一些差异，以反映基于液滴的数据的一些独特方面。
 
-Here, we describe a brief analysis of the peripheral blood mononuclear cell (PBMC) dataset from 10X Genomics [@zheng2017massively].
-The data are publicly available from the [10X Genomics website](https://support.10xgenomics.com/single-cell-gene-expression/datasets/2.1.0/pbmc4k), 
-from which we download the raw gene/barcode count matrices, i.e., before cell calling from the _CellRanger_ pipeline.
+在这里，我们描述了来自10X Genomics的外周血单核细胞（PBMC）数据集进行简要分析 [@zheng2017massively]。
+这些数据可从[10X Genomics网站](https://support.10xgenomics.com/single-cell-gene-expression/datasets/2.1.0/pbmc4k)公开获得, 
+我们从中下载原始基因/条形码计数矩阵，例如 _CellRanger_ 流程中细胞calling之前。
 
 ```{r}
 library(BiocFileCache)
@@ -40,12 +40,12 @@ raw.path <- bfcrpath(bfc, file.path("http://cf.10xgenomics.com/samples",
 untar(raw.path, exdir=file.path(tempdir(), "pbmc4k"))
 ```
 
-# Setting up the data
+# 数据准备
 
-## Reading in a sparse matrix
+## 在稀疏的矩阵中读取计数
 
-We load in the raw count matrix using the `read10xCounts()` function from the `r Biocpkg("DropletUtils")` package.
-This will create a `SingleCellExperiment` object where each column corresponds to a cell barcode.
+我们使用`r Biocpkg("DropletUtils")` 包中的 `read10xCounts()` 函数加载原始计数矩阵。
+这将创建一个`SingleCellExperiment`其中每列对应一个细胞的条形码。 
 
 ```{r}
 library(DropletUtils)
@@ -54,18 +54,18 @@ sce <- read10xCounts(fname, col.names=TRUE)
 sce
 ```
 
-Here, each count represents the number of unique molecular identifiers (UMIs) assigned to a gene for a cell barcode.
-Note that the counts are loaded as a sparse matrix object - specifically, a `dgCMatrix` instance from the `r CRANpkg("Matrix")` package.
-This avoids allocating memory to hold zero counts, which is highly memory-efficient for low-coverage scRNA-seq data.
+这里，每个计数表示分配给细胞条形码的基因的独特分子标识符（UMI）的数量。
+请注意这里的计数是以稀疏矩阵的形式加载的，例如`r CRANpkg("Matrix")`中的`dgCMatrix`就是其中一个例子。
+这样避免了需要分配内存去保持零计数，这样对于低覆盖率的scRNA-seq来说是非常节省内存的。
 
 ```{r}
 class(counts(sce))
 ```
 
-## Annotating the rows
+## 注释行
 
-We relabel the rows with the gene symbols for easier reading.
-This is done using the `uniquifyFeatureNames()` function, which ensures uniqueness in the case of duplicated or missing symbols.
+我们将行重新标记为基因符以方便计数
+这里用的是 `uniquifyFeatureNames()`函数,该函数确保在重复或缺失符号的情况下的唯一性。 
 
 ```{r}
 library(scater)
@@ -73,8 +73,8 @@ rownames(sce) <- uniquifyFeatureNames(rowData(sce)$ID, rowData(sce)$Symbol)
 head(rownames(sce))
 ```
 
-We also identify the chromosomal location for each gene.
-The mitochondrial location is particularly useful for later quality control.
+我们还确定每个基因的染色体位置。
+线粒体位置对于后期质控特别有用。
 
 ```{r}
 library(EnsDb.Hsapiens.v86)
@@ -84,17 +84,17 @@ rowData(sce)$CHR <- location
 summary(location=="MT")
 ```
 
-# Calling cells from empty droplets
+# 从空水滴中调用细胞
 
-## Testing for deviations from ambient expression
+## 测试与外界表达的偏差
 
-An interesting aspect of droplet-based data is that we have no prior knowledge about which droplets (i.e., cell barcodes) actually contain cells, and which are empty.
-Thus, we need to call cells from empty droplets based on the observed expression profiles.
-This is not entirely straightforward as empty droplets can contain ambient (i.e., extracellular) RNA that can be captured and sequenced.
-The distribution of total counts exhibits a sharp transition between barcodes with large and small total counts (Figure \@ref(fig:rankplot)),
-probably corresponding to cell-containing and empty droplets respectively.
+基于液滴的数据的一个有趣方面是我们没有先验知道哪些液滴（即细胞条形码）实际上包含细胞，哪些是空的。
+因此，我们需要根据观察到的表达变化谱从空液滴中调用细胞。
+这不是完全简单的，因为空液滴可以包含可以捕获和测序外界（即细胞外）的RNA。
+总计数的分布表现出具有大和小总计数的条形码之间的急剧转变 (Figure \@ref(fig:rankplot)),
+可能分别对应于含细胞和空液滴。
 
-```{r rankplot, fig.cap="Total UMI count for each barcode in the PBMC dataset, plotted against its rank (in decreasing order of total counts). The inferred locations of the inflection and knee points are also shown."}
+```{r rankplot, fig.cap="PBMC数据集中每个条形码的总UMI计数，根据其排名绘制（按总计数的降序排列）。还示出了拐点和拐点的推断位置。"}
 bcrank <- barcodeRanks(counts(sce))
 
 # Only showing unique points for plotting speed.
@@ -109,9 +109,9 @@ legend("bottomleft", legend=c("Inflection", "Knee"),
 	col=c("darkgreen", "dodgerblue"), lty=2, cex=1.2)
 ```
 
-We use the `emptyDrops()` function to test whether the expression profile for each cell barcode is significantly different from the ambient RNA pool [@lun2018distinguishing].
-Any significant deviation indicates that the barcode corresponds to a cell-containing droplet.
-We call cells at a false discovery rate (FDR) of 0.1%, meaning that no more than 0.1% of our called barcodes should be empty droplets on average.
+我们使用该 `emptyDrops()` 函数 来测试每个细胞条形码的表达变化谱是否与外境RNA库显着不同[@lun2018distinguishing]。
+任何显着偏差都表明条形码对应于含有细胞的液滴。
+我们称细胞的错误发现率（FDR）为0.1％，这意味着平均来说不超过0.1%调用的条形码是空液滴。
 
 ```{r}
 set.seed(100)
@@ -119,44 +119,44 @@ e.out <- emptyDrops(counts(sce))
 sum(e.out$FDR <= 0.001, na.rm=TRUE)
 ```
 
-We then subset our `SingleCellExperiment` object to retain only the detected cells.
+然后我们将`SingleCellExperiment` 对象子集化以仅保留检测到的细胞。
 
 ```{r}
 # using which() to automatically remove NAs.
 sce <- sce[,which(e.out$FDR <= 0.001)]
 ```
 
-**Comments from Aaron:**
+**Aaron的注释:**
 
-- `emptyDrops()` computes Monte Carlo $p$-values based on a Dirichlet-multinomial model of sampling molecules into droplets.
-These $p$-values are stochastic so it is important to set the random seed to obtain reproducible results.
-- The stability of the Monte Carlo $p$-values depends on the number of iterations used to compute them. 
-This is controlled using the `niters=` argument in `emptyDrops()`, set to a default of 10000 for speed.
-Larger values improve stability at the cost of time only, so users should set `niters=` to the largest value they are willing to tolerate.
-- The function assumes that cell barcodes with total UMI counts below a certain threshold (`lower=100` by default) correspond to empty droplets, 
-and uses them to estimate the ambient expression profile.
-By definition, these barcodes cannot be cell-containing droplets and are excluded from the hypothesis testing, hence the `NA`s in the output.
-- Users wanting to use the cell calling algorithm from the _CellRanger_ pipeline can call `defaultDrops()` instead.
-This tends to be quite conservative as it often discards genuine cells with low RNA content (and thus low total counts).
-It also requires an estimate of the expected number of cells in the experiment.
+- 使用`emptyDrops()`来计算Monte Carlo $p$-值 基于分子取样成液滴的Dirichlet-多项式模型。
+这些 $p$-值是随机的，所以设置随机种子以获得可重复的结果非常重要。
+-  Monte Carlo $p$-值得稳定性取决于用于计算它们的迭代次数。
+这是使用 `emptyDrops()`中的 `niters=` 选项，将默认的速度设置为10000。
+较大的值能够提升稳定性只是要付出时间的代价，所以用户可以根据自己能承受的时间来设置 `niters=`的最大值。
+- 该函数假设具有总UMI计数并低于某个阀值(`lower=100`默认情况下)的细胞条码对应于空液滴。
+并使用它们来估计外界表达变化谱。
+根据定义，这些条形码不能是含有细胞的液滴，而是从假设检验中排除，因此以`NA`s在输出中表示。 
+- 用户想使用 _CellRanger_ 流程中细胞calling的算法可以使用`defaultDrops()` 。
+这往往是非常保守的，因为它经常丢弃具有低RNA含量的真正细胞（总计数低）
+它还需要估计实验中预期的细胞数。
 
-## Examining cell-calling diagnostics
+## cell-calling的诊断 
 
-The number of Monte Carlo iterations (specified by the `niters` argument in `emptyDrops()`) determines the lower bound for the _p_values [@phipson2010permutation].
-The `Limited` field in the output indicates whether or not the computed _p_-value for a particular barcode is bounded by the number of iterations.
-If any non-significant barcodes are `TRUE` for `Limited`, we may need to increase the number of iterations.
-A larger number of iterations will often result in a lower _p_-value for these barcodes, which may allow them to be detected after correcting for multiple testing.
+蒙特卡罗迭代次数 (由`emptyDrops()`中的`niters` 参数指定 ) 决定了 _p_valuesd的下限 [@phipson2010permutation]。
+输出中`Limited`字段表明了特定条形码的计算的p值是否受迭代次数的限制。
+如果任何不重要的条形码在`Limited`显示`TRUE`,我们可能需要增加迭代次数。
+更大数量的迭代通常会导致这些条形码的p值降低，这可能允许在校正多次测试后检测它们。 
 
 ```{r}
 table(Sig=e.out$FDR <= 0.01, Limited=e.out$Limited)
 ```
 
-As mentioned above, `emptyDrops()` assumes that barcodes with low total UMI counts are empty droplets.
-Thus, the null hypothesis should be true for all of these barcodes. 
-We can check whether the hypothesis test holds its size by examining the distribution of $p$-values for low-total barcodes.
-Ideally, the distribution should be close to uniform.
+如上所述, `emptyDrops()`假设具有低的总UMI计数的条形码是空的液滴。
+因此，对于所有这些条形码，初步假设应该是正确的。
+我们可以通过检查低的总条形码值得分布来检测假设试验是不是保持其大小一致。
+理想情况下，分布应接近均匀。
 
-```{r ambientpvalhist, fig.cap="Distribution of $p$-values for the assumed empty droplets."}
+```{r ambientpvalhist, fig.cap="假定空滴液的$p$-values分布。"}
 full.data <- read10xCounts(fname, col.names=TRUE)
 set.seed(100)
 limit <- 100   
@@ -165,16 +165,16 @@ hist(all.out$PValue[all.out$Total <= limit & all.out$Total > 0],
     xlab="P-value", main="", col="grey80") 
 ```
 
-Large peaks near zero indicate that barcodes with total counts below `lower` are not all ambient in origin.
-This can be resolved by decreasing `lower` further to exclude barcodes corresponding to droplets with very small cells.
+接近零的大峰值表明具有低于`lower`的值的条形码的总数并非全部来自外部环境。
+这可以通过进一步减少 `lower`的值去进一步排除条形码对应于具有非常小的细胞的液滴。 
 
-# Quality control on the cells
+# 细胞的质控
 
-The previous step only distinguishes cells from empty droplets, but makes no statement about the quality of the cells.
-It is entirely possible for droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis.
-We compute some QC metrics using `calculateQCMetrics()` [@mccarthy2017scater] and examine their distributions in Figure \@ref(fig:qchist).
+前一步骤仅区从空液滴中区分了细胞，但没有说明细胞的质量。
+液滴完全可能含有受损或垂死的细胞，需要在下游分析之前将其除去。
+我们使用`calculateQCMetrics()`来计算一些质控(QC)的指标 [@mccarthy2017scater]并检查它们在图 \@ref(fig:qchist)中的分布。
 
-```{r qchist, fig.width=10, fig.asp=0.5, fig.cap="Histograms of QC metric distributions in the PBMC dataset."}
+```{r qchist, fig.width=10, fig.asp=0.5, fig.cap="PBMC数据集中QC指标分布的直方图。"}
 sce <- calculateQCMetrics(sce, feature_controls=list(Mito=which(location=="MT")))
 par(mfrow=c(1,3))
 hist(sce$log10_total_counts, breaks=20, col="grey80",
@@ -185,10 +185,10 @@ hist(sce$pct_counts_Mito, breaks=20, col="grey80",
 	xlab="Proportion of reads in mitochondrial genes")
 ```
 
-Ideally, we would remove cells with low library sizes or total number of expressed features as described `r simpleSingleCell:::.link("reads", "Quality control on the cells", "previously")`.
-However, this would likely remove cell types with low RNA content, especially in a heterogeneous PBMC population with many different cell types.
-Thus, we use a more relaxed strategy and only remove cells with large mitochondrial proportions, using it as a proxy for cell damage.
-(Keep in mind that droplet-based datasets usually do not have spike-in RNA.)
+理想情况下，我们会删除具有小的文库或低的表达特征总数的细胞，如`r simpleSingleCell:::.link("reads", "Quality control on the cells", "之前所述")`。
+然而，这可能会去除具有低RNA含量的细胞类型，尤其是在含有许多不同细胞类型的异质PBMC群体中。
+因此，我们使用更宽松的策略，只去除具有大线粒体比例的细胞，使用它作为细胞损伤的标识。
+(请记住，基于液滴的数据集通常没有加标RNA。)
 
 ```{r}
 high.mito <- isOutlier(sce$pct_counts_Mito, nmads=3, type="higher")
@@ -196,39 +196,38 @@ sce <- sce[,!high.mito]
 summary(high.mito)
 ```
 
-**Comments from Aaron:**
+**Aaron的注释:**
 
-- The above justification for using a more relaxed filter is largely retrospective.
-In practice, we may not know _a priori_ the degree of population heterogeneity and whether it manifests in the QC metrics.
-We recommend performing an initial analysis with some QC, and then relaxing the filter (or making it more stringent) based on further diagnostics.
-See `r simpleSingleCell:::.link("qc", "Checking for discarded cell types", "here")` for an example of a potential diagnostic approach.
-- Removal of cells with high mitochondrial content assumes that the damage to the cell membrane is modest enough that the mitochondria are retained.
-It is possible for the cells to be so damaged that all cytoplasmic content is lost and only the stripped nucleus remains for sequencing.
-This manifests as mitochondrial proportions of zero, usually accompanied by low library sizes/numbers of expressed genes and possibly low ribosomal protein gene expression.
-If a cluster of such cells is observed in the data, they can be removed by using `isOutlier()` on the mitochondrial proportions with `type="lower"` and `log=TRUE`
-(to improve resolution around zero).
+- 使用更宽松的过滤方法往往很大程度上是可追溯的。
+在实践中，我们可能不会预先地知道群体异质性的程度和它是否出现在QC的指标中。
+我们建议使用某些QC进行初始的分析，然后根据进一步的判断来选择是否放宽过滤的标准(或使其更加严格）。
+请查阅 `r simpleSingleCell:::.link("qc", "Checking for discarded cell types", "此处")` 以获取潜在判断方法的示例。
+- 去除含有大量线粒体的细胞，基于假定对细胞膜的损伤是适度，以保留线粒体。
+细胞可能受到非常大的破坏，导致所有细胞质内容物丢失，只有剥离的细胞核保留用于测序。
+这表现为线粒体比例为零，通常伴随着低文库大小/表达基因数量和可能低核糖体蛋白基因表达。
+如果在数据中观察到这样的细胞聚类，他们可以通过对线粒体比例`type="lower"` 和 `log=TRUE`使用`isOutlier()`去除去它们。（以提高零附近的分辨率）
 
-# Examining gene expression
+# 检查基因的表达
 
-The average expression of each gene is much lower here compared to the previous datasets (Figure \@ref(fig:abhist)).
-This is due to the reduced coverage per cell when thousands of cells are multiplexed together for sequencing.
+与之前的数据相比，这里每个基因的平均表达量要低得多 (Figure \@ref(fig:abhist))。
+这是因为当将数千个细胞多路复用在一起进行测序时每个细胞的覆盖率会降低。
 
-```{r abhist, fig.cap="Histogram of the log~10~-average counts for each gene in the PBMC dataset."}
+```{r abhist, fig.cap="PBMC数据集中每个基因的log 10-平均值的直方图"}
 ave <- calcAverage(sce)
 rowData(sce)$AveCount <- ave
 hist(log10(ave), col="grey80")
 ```
 
-The set of most highly expressed genes is dominated by ribosomal protein and mitochondrial genes (Figure \@ref(fig:highexpr)), as expected.
+如预期那样，最高表达基因的集合由核糖体蛋白和线粒体基因控制(Figure \@ref(fig:highexpr))。
 
-```{r highexpr, fig.wide=TRUE, fig.asp=1.5, fig.cap="Percentage of total counts assigned to the top 50 most highly-abundant features in the PBMC dataset. For each feature, each bar represents the percentage assigned to that feature for a single cell, while the circle represents the average across all cells. Bars are coloured by the total number of expressed features in each cell."}
+```{r highexpr, fig.wide=TRUE, fig.asp=1.5, fig.cap="分配给PBMC数据集中前50个最丰富的功能的总计数百分比。对于每个要素，每个条形表示为单个细胞分配给该要素的百分比，而圆圈表示所有细胞的平均值。条形由每个细胞中表达的特征的总数着色。"}
 plotHighestExprs(sce)
 ```
 
-# Normalizing for cell-specific biases
+# 针对细胞特异性差进行标准化
 
-We perform some pre-clustering as described `r simpleSingleCell:::.link("umis", "Normalization of cell-specific biases", label="previously")`.
-Recall that we need to set the seed when using `BSPARAM=IrlbaParam()` due to the randomness of `r CRANpkg("irlba")`. 
+像之前描述那样，我们执行了一些预聚类`r simpleSingleCell:::.link("umis", "Normalization of cell-specific biases", label="previously")`。
+我们需要设置种子当我们使用`BSPARAM=IrlbaParam()` 由于`r CRANpkg("irlba")`的随机性。 
 
 ```{r}
 library(scran)
@@ -238,64 +237,64 @@ clusters <- quickCluster(sce, use.ranks=FALSE, BSPARAM=IrlbaParam())
 table(clusters)
 ```
 
-We apply the deconvolution method to compute size factors for all cells [@lun2016pooling].
-Again, we use `min.mean=0.1` to account for the fact that UMI counts are lower.
-The specification of `cluster=` also ensures that we do not pool cells that are very different.
+我们应用反卷积方法来计算所有细胞的size factors [@lun2016pooling]。
+同样，我们`min.mean=0.1`用来解释UMI计数较低的现象。
+具体化`cluster=` 还确保我们不会汇集非常不同的细胞。
 
 ```{r}
 sce <- computeSumFactors(sce, min.mean=0.1, cluster=clusters)
 summary(sizeFactors(sce))
 ```
 
-The size factors are well correlated against the library sizes (Figure \@ref(fig:sfplot)), indicating that capture efficiency and sequencing depth are the major biases.
+Size factors 与文库大小密切相关 (Figure \@ref(fig:sfplot)),表明捕获效率和测序深度是引起偏差的主要因素。
 
-```{r sfplot, fig.cap="Size factors for all cells in the PBMC dataset, plotted against the library size."}
+```{r sfplot, fig.cap="PBMC数据集中所有细胞的size factors，根据文库大小绘制。"}
 plot(sce$total_counts, sizeFactors(sce), log="xy")
 ```
 
-Finally, we compute normalized log-expression values.
-There is no need to call `computeSpikeFactors()` here, as there are no spike-in transcripts available.
+最后，我们计算规一化的对数表达量值。
+这里没有必要调用 `computeSpikeFactors()`, 因为加标准转录物是没有的。
 
 ```{r}
 sce <- normalize(sce)
 ```
 
-**Comments from Aaron:**
+**Aaron的注释:**
 
-- Larger droplet-based datasets will often be generated in separate batches or runs.
-In such cases, we can set `block=` in `quickCluster()` to cluster cells within each batch or run.
-This reduces computational work considerably without compromising performance, provided that there are enough cells within each batch.
-- Even in the absence of any known batch structure, we can improve speed by setting an arbitrary factor, e.g., using `block=cut(seq_len(ncol(sce)), 10)` to split the cells into ten "batches" of roughly equal size.
-Recall that we are not interpreting the clusters themselves, so it is not a problem to have multiple redundant cluster labels.
-Again, this assumes that each cluster is large enough to support deconvolution.
-- On a similar note, both `quickCluster()` and `computeSumFactors()` can process blocks or clusters in parallel.
-This is achieved using the `r Biocpkg("BiocParallel")` framework, which provides support for a range of parallelization strategies.
+- 基于液滴的较大数据集通常会在不同的批次或运行中生成。
+在这种情况下，我们可以设置`quickCluster()`中的 `block=`，在每个批次或者每次运行中去聚类细胞。
+如果每批中有足够的细胞，这可以在不影响性能的情况下明显地减少计算量。
+- 即使在没有任何已知批量结构的情况下，我们也可以通过设置任意因子来提高速度，例如使用 `block=cut(seq_len(ncol(sce)), 10)`将细胞分成大小相等的十个“批次”。
+记住我们不是为了解析聚类，所以使用多个冗余聚类群标签是没问题的。 
+同样，这假设每个聚类足够大以支持反卷积。
+- 在一个类似的说明中, `quickCluster()`和`computeSumFactors()` 都可以并行处理块或聚类。
+这是使用`r Biocpkg("BiocParallel")`框架实现的, 该框架为一系列并行化策略提供帮助。
 
-# Modelling the mean-variance trend
+# 模拟均值-差异趋势
 
-The lack of spike-in transcripts complicates the modelling of the technical noise.
-One option is to assume that most genes do not exhibit strong biological variation, and to fit a trend to the variances of endogenous genes
-(see `r simpleSingleCell:::.link("var", "When spike-ins are unavailable", "here")` for details).
-However, this assumption is generally unreasonable for a heterogeneous population.
-Instead, we assume that the technical noise is Poisson and create a fitted trend on that basis using the `makeTechTrend()` function.
+缺少加标转录物使得技术噪声的建模变得复杂。
+一种选择是假设大多数基因没有表现出强烈的生物学变异，并且适应内源基因变异的趋势，详见
+(see `r simpleSingleCell:::.link("var", "When spike-ins are unavailable", "此处")`。
+然而，对于异质群体而言，这种假设通常是不合理的。
+相反，我们假设技术噪声是遵循泊松的，并使用该`makeTechTrend()`z哎此基础上创建拟合趋势。
 
 ```{r}
 new.trend <- makeTechTrend(x=sce)
 ```
 
-We estimate the variances for all genes and compare the trend fits in Figure \@ref(fig:trendplot).
-The Poisson-based trend serves as a lower bound for the variances of the endogenous genes.
-This results in non-zero biological components for most genes, which is consistent with other UMI-based data sets 
-(see the `r simpleSingleCell:::.link("umis", "Modelling and removing technical_noise", "corresponding analysis")` of the @zeisel2015brain data set).
+我们估计所有基因的差异，并比较图 \@ref(fig:trendplot)的趋势拟合度。
+基于泊松的趋势作为内源基因变异的下限。
+这能让我们测量许多细胞中非零的生物成分, 这是与其它基于UMI-数据集相一致
+(参见 `r simpleSingleCell:::.link("umis", "Modelling and removing technical_noise", "相对应的分析")` 的@zeisel2015brain 数据集)。
 
-```{r trendplot, fig.cap="Variance of normalized log-expression values for each gene in the PBMC dataset, plotted against the mean log-expression. The blue line represents the mean-dependent trend fitted to the variances, while the red line represents the Poisson noise."}
+```{r trendplot, fig.cap="PBMC数据集中每个基因的归一化对数表达值的方差，相对于平均对数表达作图。蓝线表示与方差拟合的平均相关趋势，而红线表示泊松噪声。"}
 fit <- trendVar(sce, use.spikes=FALSE, loess.args=list(span=0.05))
 plot(fit$mean, fit$var, pch=16)
 curve(fit$trend(x), col="dodgerblue", add=TRUE)
 curve(new.trend(x), col="red", add=TRUE)
 ```
 
-We decompose the variance for each gene using the Poisson-based trend, and examine the genes with the highest biological components.
+我们使用基于Poisson的趋势分解每个基因的差异，并检查具有最高生物成分的基因。
 
 ```{r}
 fit$trend <- new.trend # overwrite trend.
@@ -304,25 +303,24 @@ top.dec <- dec[order(dec$bio, decreasing=TRUE),]
 head(top.dec)
 ```
 
-We can plot the genes with the largest biological components, to verify that they are indeed highly variable (Figure \@ref(fig:hvgplot)).
+我们可以绘制具有最大生物成分的基因，以验证它们确实是高度可变的 (Figure \@ref(fig:hvgplot))。
 
-```{r hvgplot, fig.wide=TRUE, fig.cap="Distributions of normalized log-expression values for the top 10 genes with the largest biological components in the PBMC dataset. Each point represents the log-expression value in a single cell."}
+```{r hvgplot, fig.wide=TRUE, fig.cap="PBMC数据集中具有最大生物组分的前10个基因的归一化对数表达量的分布。每个点代表单个细胞中的对数表达量的值。"}
 plotExpression(sce, features=rownames(top.dec)[1:10])
 ```
 
-**Comments from Aaron:**
+**Aaron的注释:**
 
-- The Poisson-based trend from `makeTechTrend()` tends to yield large biological components for highly-expressed genes for which Poisson noise is low (in the log-expression space).
-This often includes so-called "house-keeping" genes coding for essential cellular components such as ribosomal proteins.
-These genes are often considered uninteresting for characterizing cellular heterogeneity, 
-though this is debatable as they are often differentially expressed in a variety of conditions [@glare2002betaactin;@nazari2015gapdh;@guimaraes2016patterns].
-Indeed, the fact that they have large biological components indicates that there is strong variation in their expression across cells, which warrants some further investigation.
-Nonetheless, if they are deemed to be uninteresting, their impact can be reduced by fitting the mean-variance trend to the endogenous genes.
+- 基于泊松的趋势`makeTechTrend()`倾向产生具有高表达量的基因大的生物成分通常其对应的泊松噪声是比较低的（在对数表达空间中）。
+这通常包括编码必需细胞组分（如核糖体蛋白）的所谓“管家”基因。
+这些基因通常被认为对表征细胞异质性不产生影响，尽管这是有争议的，因为它们通常在各种条件下差异表达[@glare2002betaactin;@nazari2015gapdh;@guimaraes2016patterns]。
+事实上，它们具有大量生物成分的事实表明它们在细胞中的表达存在很大差异，这需要进一步研究。
+尽管如此，如果它们被认为是不重要的，那么通过将均值差异的趋势拟合到内源基因，可以减少它们的影响。
 
-# Dimensionality reduction
+# 降维
 
-We use the `denoisePCA()` function with the assumed Poisson technical trend to choose the number of dimensions to retain after PCA.
-Recall that this involves a random initialization when `BSPARAM=IrlbaParam()`, which motivates the call to `set.seed()` to obtain reproducible results.
+我们使用 `denoisePCA()` 功能基于假设的泊松技术趋势来选择PCA后需要保留下来的维度。 
+这涉及随机初始化当 `BSPARAM=IrlbaParam()`, 这会促使调用`set.seed()`去获取可重复的结果。 
 
 ```{r}
 set.seed(1000)
@@ -330,30 +328,30 @@ sce <- denoisePCA(sce, technical=new.trend, BSPARAM=IrlbaParam())
 ncol(reducedDim(sce, "PCA"))
 ```
 
-```{r screeplot, fig.cap="Variance explained by each principal component in the PBMC dataset. The red line represents the chosen number of PCs."}
+```{r screeplot, fig.cap="PBMC数据集中每个主成分解释的差异。红线表示所选的PC数量。"}
 plot(attr(reducedDim(sce), "percentVar"), xlab="PC",
 	ylab="Proportion of variance explained")
 abline(v=ncol(reducedDim(sce, "PCA")), lty=2, col="red")
 ```
 
-Examination of the first few PCs already reveals some strong substructure in the data (Figure \@ref(fig:pcaplot-init)).
+查看前几个PCs已经能够揭示数据中含有强烈的子结构 (Figure \@ref(fig:pcaplot-init))。
 
-```{r pcaplot-init, fig.cap="Pairwise PCA plots of the first three PCs in the PBMC dataset, constructed from normalized log-expression values of genes with positive biological components. Each point represents a cell, coloured by the log-number of expressed features.", fig.width=9}
+```{r pcaplot-init, fig.cap="PBMC数据集中前三个PC的成对PCA图，由具有阳性生物成分的基因的标准化对数表达值构建。每个点代表一个细胞，由表达特征的对数值表示。", fig.width=9}
 plotPCA(sce, ncomponents=3, colour_by="log10_total_features_by_counts")
 ```
 
-This is recapitulated with a _t_-SNE plot (Figure \@ref(fig:tsneplot-init)).
-Again, note that we set `use_dimred=` to perform _t_-SNE on the denoised expression matrix.
+这用 _t_-SNE 图重现 (Figure \@ref(fig:tsneplot-init)).
+再次注意，我们设置`use_dimred=`去执行 _t_-SNE 计算在去噪表达式矩阵中.
 
-```{r tsneplot-init, fig.cap="_t_-SNE plots constructed from the denoised PCs of the PBMC dataset. Each point represents a cell and is coloured according to the log-number of expressed features."}
+```{r tsneplot-init, fig.cap="_从PBMC数据集的去噪PC构建的t- SA图。每个点代表一个细胞，并根据表达的特征的对数值来着色。"}
 set.seed(1000)
 sce <- runTSNE(sce, use_dimred="PCA", perplexity=30)
 plotTSNE(sce, colour_by="log10_total_features_by_counts")
 ```
 
-# Clustering with graph-based methods
+# 使用基于图形的方法进行聚类
 
-We build a shared nearest neighbour graph [@xu2015identification] and use the Walktrap algorithm to identify clusters.
+我们构建了一个共享的最近邻图[@xu2015identification]并使用Walktrap算法来识别聚类。
 
 ```{r}
 snn.gr <- buildSNNGraph(sce, use.dimred="PCA")
@@ -362,11 +360,10 @@ sce$Cluster <- factor(clusters$membership)
 table(sce$Cluster)
 ```
 
-We look at the ratio of the observed and expected edge weights to confirm that the clusters are modular.
-(We don't look at the modularity score itself, as that varies by orders of magnitudes across clusters and is difficult to interpret.)
-Figure \@ref(fig:clustermod) indicates that most of the clusters are well seperated, with few strong off-diagonal entries. 
-
-```{r clustermod, fig.cap="Heatmap of the log~10~-ratio of the total weight between nodes in the same cluster or in different clusters, relative to the total weight expected under a null model of random links."}
+我们查看观察到的和预期的边缘权重的比率，以确认聚类是模块化的。
+（我们不会看模块性其本身的得分，因为它会因聚类之间的数量级而变化，并且难以解释。）
+图 \@ref(fig:clustermod) 表明大多数聚类分开得很好，几乎没有强烈的非对角线聚类。
+```{r clustermod, fig.cap="相对于在随机链接的空模型下预期的总权重，相同聚类或不同聚类中的节点之间的总权重的log 10的比率。"}
 cluster.mod <- clusterModularity(snn.gr, sce$Cluster, get.values=TRUE)
 log.ratio <- log2(cluster.mod$observed/cluster.mod$expected + 1)
 
@@ -375,13 +372,13 @@ pheatmap(log.ratio, cluster_rows=FALSE, cluster_cols=FALSE,
     color=colorRampPalette(c("white", "blue"))(100))
 ```
 
-We examine the cluster identities on a _t_-SNE plot (Figure \@ref(fig:tsneplot-cluster)) to confirm that different clusters are indeed separated.
+我们对 _t_-SNE 图上的聚类标识进行了检验， (Figure \@ref(fig:tsneplot-cluster))以确认不同的聚类确实是分开的。
 
-```{r tsneplot-cluster, fig.cap="_t_-SNE plots constructed from the denoised PCs of the PBMC dataset. Each point represents a cell and is coloured according to its cluster identity."}
+```{r tsneplot-cluster, fig.cap="从PBMC数据集的去噪PC构建的t- SEL图。每个点代表一个细胞，并根据其聚类标识进行着色。"}
 plotTSNE(sce, colour_by="Cluster")
 ```
 
-# Marker gene detection
+# 标记基因的检测
 
 ```{r, echo=FALSE, results="hide"}
 # Hidden variables for use in text or hidden chunks,
@@ -389,15 +386,15 @@ plotTSNE(sce, colour_by="Cluster")
 chosen.platelets <- 9
 ```
 
-We detect marker genes for each cluster using `findMarkers()`.
-Again, we only look at upregulated genes in each cluster, as these are more useful for positive identification of cell types in a heterogeneous population.
+我们使用`findMarkers()`来检测每个聚类中标记基因的数量。
+同样，我们只关注每个聚类中的上调基因，因为这些基因对于异质群体中细胞类型的阳性鉴定会起到更好的作用。
 
 ```{r}
 markers <- findMarkers(sce, clusters=sce$Cluster, direction="up")
 ```
 
-We examine the markers for cluster `r chosen.platelets` in more detail.
-The upregulation of genes such as _PF4_ and _PPBP_ suggests that this cluster contains platelets or their precursors.
+我们更详细地检查了聚类 `r chosen.platelets`中的标记基因。 
+_PF4_ 和 _PPBP_等基因的上调表明该聚类含有血小板或其前体。
 
 ```{r}
 marker.set <- markers[["9"]]
@@ -413,9 +410,9 @@ pf4 <- sapply(marker.set["PF4",-(1:3)], sign)
 stopifnot(all(pf4==1))
 ```
 
-This is confirmed in Figure \@ref(fig:heatmap), where the transcriptional profile of cluster `r chosen.platelets` is clearly distinct from the others.
+这在图 \@ref(fig:heatmap), 得到证实，其中聚类 `r chosen.platelets`的转录变化谱明显不同于其他聚类。
 
-```{r heatmap, fig.wide=TRUE, fig.cap=sprintf("Heatmap of mean-centred and normalized log-expression values for the top set of markers for cluster %s in the PBMC dataset. Column colours represent the cluster to which each cell is assigned, as indicated by the legend.", chosen.platelets)}
+```{r heatmap, fig.wide=TRUE, fig.cap=sprintf("PBMC数据集中聚类`r chosen.platelets`的顶部标记集的平均中心和标准化对数表达值的热图。列颜色表示每个细胞分配到的聚类，如图例所示。", chosen.platelets)}
 chosen <- rownames(marker.set)[marker.set$Top <= 10]
 plotHeatmap(sce, features=chosen, exprs_values="logcounts", 
     zlim=5, center=TRUE, symmetric=TRUE, cluster_cols=FALSE,
@@ -423,10 +420,10 @@ plotHeatmap(sce, features=chosen, exprs_values="logcounts",
     show_colnames=FALSE)
 ```
 
-# Concluding remarks
+# 结束语
 
-Having completed the basic analysis, we save the `SingleCellExperiment` object with its associated data to file.
-This avoids having to repeat all of the pre-processing steps described above prior to further analyses.
+完成基本分析后，我们将`SingleCellExperiment` 对象及其关联数据保存到文件中。
+这避免了在进一步分析之前必须重复上述所有预处理步骤。
 
 ```{r}
 saveRDS(sce, file="pbmc_data.rds")
