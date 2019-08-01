@@ -96,7 +96,7 @@ stopifnot(identical(endo.data$metadata$cell_id, spike.data$metadata$cell_id)) # 
 stopifnot(all(endo.data$metadata$cell_id==mito.data$metadata$cell_id)) # should now be the same.
 ```
 
-在该特定数据集中，一些基因由对应于可供选择的基因位置的多行来表示。 
+在该给定数据集中，一些基因由对应于可供选择的基因位置的多行来表示。 
 为了便于解释，我们将对应于单个基因的所有行的计数相加。
 
 ```{r}
