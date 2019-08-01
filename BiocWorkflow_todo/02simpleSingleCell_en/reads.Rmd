@@ -33,7 +33,7 @@ opts_chunk$set(fig.asp=1)
 
 # 概述
 
-在这个工作流程中，我们使用一个相对简单的数据集 [@lun2017assessing] 来介绍scRNA-seq数据分析的大部分概念。
+在这个工作流程中，我们使用一个相对比较简单的数据集 [@lun2017assessing] 来介绍scRNA-seq数据分析的大部分概念。
 该数据集包含两个416B细胞板（永生化小鼠骨髓祖细胞系），使用Smart-seq2s实验方法来处理 [@picelli2014fulllength]。
 在文库制备之前，还将the External RNA Controls协会（ERCC）的z指定的恒定量的加标RNA添加到每个细胞的裂解物中。
 然后进行进行高通量测序，并通过计数能比对到外显子区域的reads的总数来量化每个基因的表达量。
