@@ -46,7 +46,7 @@ opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE, cache=TRUE)
 分析单细胞转录组计数数据来检测高度多变的基因（HVG），这些高度多变的基因能驱动群体中细胞的异质性。分析单细胞转录组数据也能发现基因和细胞表型之间的相关性，或通过降维和聚类来鉴定新的亚群。这能让我们从单细胞水平去理解生物学问题，这是细胞群水平的传统的RNA测序无法实现的。
 
 scRNA-seq数据分析的策略与传统的RNA-seq的策略明显不同。
-一个技术原因是scRNA-seq数据比传统批量数据噪声更大 [@brennecke2013accounting;@marinov2014singlecell].
+其一个技术原因是scRNA-seq数据比传统批量数据噪声更大 [@brennecke2013accounting;@marinov2014singlecell]。
 由于单个细胞中RNA的量低，难以将转录物可靠地捕获（即转化）成cDNA用于测序。
 这增加了drop-out事件的频率，并产生没有捕获基因的转录物。在分析过程中需要专门的步骤来处理这种噪音，特别是在质控的时候。此外，scRNA-seq数据可用于研究细胞间异质性，例如，识别新的细胞亚型，表征分化过程，将细胞分配到细胞周期阶段，或识别驱动整个种群的变异性的高度多变基因(HVG) [@vallejos2015basics;@fan2016characterizing;@trapnell2014dynamics]。
 传统的批量RNA数据并不能实现上面提到的应用，这意味着需要新的分析流程来执行单细胞转录组分析。
