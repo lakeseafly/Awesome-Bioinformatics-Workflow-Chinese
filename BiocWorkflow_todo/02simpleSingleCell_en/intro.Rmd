@@ -1,5 +1,5 @@
 ---
-title: Workflows for analyzing single-cell RNA-seq data with R/Bioconductor
+title: 使用R / Bioconductor分析单细胞RNA-seq数据的工作流程
 author: 
 - name: Aaron T. L. Lun
   affiliation: &CRUK Cancer Research UK Cambridge Institute, Li Ka Shing Centre, Robinson Way, Cambridge CB2 0RE, United Kingdom
@@ -29,70 +29,65 @@ library(knitr)
 opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE, cache=TRUE)
 ```
 
-# Workflow version information
+# 分析流程版本信息
 
-**R version**: `r R.version.string`
+**R 版本**: `r R.version.string`
 
-**Bioconductor version**: `r BiocManager::version()`
+**Bioconductor 版本**: `r BiocManager::version()`
 
-**Package**: `r packageVersion("simpleSingleCell")`
+**该R包版本**: `r packageVersion("simpleSingleCell")`
 
-# Motivation
+# 动机
 
-Single-cell RNA sequencing (scRNA-seq) is widely used to measure the genome-wide expression profile of individual cells.
-From each cell, mRNA is isolated and reverse transcribed to cDNA for high-throughput sequencing [@stegle2015computational].
-This can be done using microfluidics platforms like the Fluidigm C1 [@pollen2014lowcoverage], protocols based on microtiter plates like Smart-seq2 [@picelli2014fulllength], or droplet-based technologies like inDrop [@klein2015droplet;@macosko2015highly].
-The number of reads mapped to each gene is then used to quantify its expression in each cell.
-Alternatively, unique molecular identifiers (UMIs) can be used to directly measure the number of transcript molecules for each gene [@islam2014quantitative].
-Count data are analyzed to detect highly variable genes (HVGs) that drive heterogeneity across cells in a population, to find correlations between genes and cellular phenotypes, or to identify new subpopulations via dimensionality reduction and clustering. 
-This provides biological insights at a single-cell resolution that cannot be achieved with conventional bulk RNA sequencing of cell populations.
+单细胞RNA测序（scRNA-seq）b被广泛用于测量单个细胞的全基因组表达状况。
+从每个细胞中分离mRNA并将其逆转录为cDNA以进行高通量测序 [@stegle2015computational].
+测序的方法可以使用微流体平台，如Fluidigm C1 [@pollen2014lowcoverage], 基于微量滴定板的方案，如Smart-seq2  [@picelli2014fulllength], 或基于液滴的技术，如inDrop [@klein2015droplet;@macosko2015highly]。
+然后使用比对到每个基因的read的数量来量化其在每个细胞中的表达量。又或者，独特的分子标识物（UMI）可用于直接测量每个基因的转录物分子数 [@islam2014quantitative]。
+分析单细胞转录组计数数据来检测高度多变的基因（HVG），这些高度多变的基因能驱动群体中细胞的异质性。分析单细胞转录组数据也能发现基因和细胞表型之间的相关性，或通过降维和聚类来鉴定新的亚群。这能让我们从单细胞水平去理解生物学问题，这是细胞群水平的传统的RNA测序无法实现的。
 
-Strategies for scRNA-seq data analysis differ markedly from those for bulk RNA-seq.
-One technical reason is that scRNA-seq data are much noisier than bulk data [@brennecke2013accounting;@marinov2014singlecell].
-Reliable capture (i.e., conversion) of transcripts into cDNA for sequencing is difficult with the low quantity of RNA in a single cell.
-This increases the frequency of drop-out events where none of the transcripts for a gene are captured.
-Dedicated steps are required to deal with this noise during analysis, especially during quality control.
-In addition, scRNA-seq data can be used to study cell-to-cell heterogeneity, e.g., to identify new cell subtypes, to characterize differentiation processes, to assign cells into their cell cycle phases, or to identify HVGs driving variability across the population [@vallejos2015basics;@fan2016characterizing;@trapnell2014dynamics].
-This is simply not possible with bulk data, meaning that custom methods are required to perform these analyses. 
+scRNA-seq数据分析的策略与传统的RNA-seq的策略明显不同。
+一个技术原因是scRNA-seq数据比传统批量数据噪声更大 [@brennecke2013accounting;@marinov2014singlecell].
+由于单个细胞中RNA的量低，难以将转录物可靠地捕获（即转化）成cDNA用于测序。
+这增加了drop-out事件的频率，并产生没有捕获基因的转录物。在分析过程中需要专门的步骤来处理这种噪音，特别是在质控的时候。此外，scRNA-seq数据可用于研究细胞间异质性，例如，识别新的细胞亚型，表征分化过程，将细胞分配到细胞周期阶段，或识别驱动整个种群的变异性的高度多变基因(HVG) [@vallejos2015basics;@fan2016characterizing;@trapnell2014dynamics]。
+传统的批量RNA数据并不能实现上面提到的应用，这意味着需要新的分析流程来执行单细胞转录组分析。
 
-# scRNA-seq data analysis with Bioconductor
+# 使用Bioconductor 进行单细胞数据分析
 
-This package contains a set of computational workflows for basic analysis of scRNA-seq data, using software from the open-source Bioconductor project [@huber2015orchestrating].
-The workflows start from a count matrix and describe a number of key steps for scRNA-seq data analysis, including:
+该软件包包含一组用于scRNA-seq基本数据分析的计算工作流程，使用来自开源Bioconductor项目的软件 [@huber2015orchestrating].
+工作流程从计数矩阵开始，描述了一系列scRNA-seq数据分析的关键步骤，包括：
 
-- quality control to remove problematic cells;
-- normalization of cell-specific biases, with and without spike-ins; 
-- correction for batch effects; 
-- cell cycle phase classification from gene expression data; 
-- data exploration to identify putative subpopulations; 
-- and finally, HVG and marker gene identification to prioritize interesting genes.
+- 质控，以消除有问题的细胞;
+- 细胞特异性偏倚的正常化, 有还是没有标记; 
+- 批量效应的修正; 
+- 基因表达数据的细胞周期阶段分类; 
+- 数据探索，以确定推定的亚群; 
+- 最后，HVG和标记基因的识别以确认感兴趣的基因。
 
-The application of these procedures will be demonstrated on several public scRNA-seq datasets involving immortalized myeloid progenitors, brain cells, haematopoietic stem cells, T-helper cells and mouse embryonic stem cells, generated with a range of experimental protocols and platforms [@lun2017assessing;@wilson2015combined;@zeisel2015brain;@islam2011characterization;@buettner2015computational;@zheng2017massively].
-The aim is to provide a variety of modular usage examples that can be applied by readers to construct custom analysis pipelines for their own experiments.
+几个公共scRNA-seq数据集将用于展示该工具的分析流程，这些数据集包括永生化骨髓祖细胞，脑细胞，造血干细胞，T辅助细胞和小鼠胚胎干细胞。 这些数据集都是通过一系列实验方案和平台生成。 [@lun2017assessing;@wilson2015combined;@zeisel2015brain;@islam2011characterization;@buettner2015computational;@zheng2017massively].
+z这样做的目的是提供各种模块化使用示例，以便读者可以更好的使用这些示例来为自己的实验构建自定义分析流程。
 
-See the `r Biocpkg("simpleSingleCell")` landing page for links to individual workflows and for instructions on how to install the required packages.
-To cite any of these workflows, please refer to http://f1000research.com/articles/5-2122/v2 for instructions.
+请参阅 `r Biocpkg("simpleSingleCell")` 登录页面，以获取各个工作流程的链接以及有关如何安装所需软件包的说明。要引用任何这些工作流程，请参阅 http://f1000research.com/articles/5-2122/v2 以获取相关说明。
 
-# Obtaining a count matrix
+# 获取计数矩阵
 
-All of these workflows start from a publicly available count matrix.
-For simplicity, we forego a description of the read processing steps required to generate the count matrix, i.e., read alignment and counting into features.
-For SMART-seq2 data [@picelli2014fulllength], quantification procedures developed for bulk RNA-seq are generally satisfactory [@love2015rnaseq;@chen2016from].
-Users favouring an R-based approach to read alignment and counting might consider using the methods in the `r Biocpkg("Rsubread")` package [@liao2013subread;@liao2014featurecounts].
+所有这些工作流程都从公开可用的计数矩阵开始。
+为简单起见，我们放弃了生成计数矩阵所需的读取处理步骤的描述，即read的比对和其相关特征的统计。
+对于SMART-seq2数据 [@picelli2014fulllength], 针对大量RNA-seq开发的定量程序通常是令人满意的 [@love2015rnaseq;@chen2016from].
+喜欢使用基于R的方法来进行read的比对和计数的用户可以考虑使用 `r Biocpkg("Rsubread")` 包中的方法 [@liao2013subread;@liao2014featurecounts]。
 
-Many other scRNA-seq protocols contain bespoke sequence structures that require careful processing:
+许多其它scRNA-seq实验方法包含需要小心处理的预定的序列结构：
 
-- Unique molecular identifiers (UMIs) [@islam2014quantitative] are widely used to mitigate the effects of amplification biases.
-Reads with the same UMI mapping to the same gene represent a single underlying transcript molecule and only increment the count of that gene by one.
-Processing of this data requires extraction of the UMI sequence from each read or read pair, and a method to collapse UMI-based duplicates into a single count [@smith2017umitools].
-- Protocols may also use custom cell barcodes to improve multiplexing efficiency beyond that offered by the standard sequencing barcodes (e.g., from Illumina).
-This includes data generated from droplet-based experiments [@zheng2017massively] or from very high-throughput plate-based protocols like MARS-seq [@jaitin2014massively].
-Processing of this data usually requires a separate step to extract the barcode sequence from each read and to allocate the read to the correct per-cell sequencing library.
+- 独特的分子标识物 (UMIs) [@islam2014quantitative] 被广泛用于减轻扩增偏差的影响。
+具有相同的UMI比对到相同基因的reads代表单个基础转录物分子并且仅将该基因的计数增加1。
+处理此数据需要从每个read或reads对中提取UMI序列，以及将基于UMI的重复项整合为单个计数的方法 [@smith2017umitools]。
+- 有些方法还可以使用定制细胞条形码来提高多路复用效率，以超过标准测序条形码的效率（例如，来自Illumina）。
+这包括基于液滴的实验， [@zheng2017massively] 或非常高通量的基于板的实验技术（如MARS-seq)生成的数据。 [@jaitin2014massively]。
+处理该数据通常需要单独的步骤，从每次read中提取条形码序列并将read，并准确地分配给每个细胞的测序文库。
 
-For these data sets, the `r Biocpkg("scPipe")` package [@lian2018scpipe] provides an R-based processing pipeline for obtaining a count matrix. 
+对于这些数据集,`r Biocpkg("scPipe")` 包 [@lian2018scpipe] p）提供了用于获得计数矩阵的基于R的处理流程。
 
-If spike-in RNA was added, the sequences of the spike-in transcripts can be included as additional FASTA files during genome index building prior to alignment.
-Similarly, genomic intervals for both spike-in transcripts and endogenous genes can be concatenated into a single GTF file prior to counting.
+如果添加加标RNA，则在比对之前的基因组索引构建期间可以将包括加标转录物的序列作为额外的FASTA文件。
+类似地，可以在计数之前将加标转录物和内源基因的基因组间隔连接成单个GTF文件。
 
 # Author information
 
